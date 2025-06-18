@@ -16,22 +16,20 @@ const PORT: &str = "9002";
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum PointerEventType {
-    #[serde(rename = "pointerdown")]
+    #[serde(rename = "ACTION_DOWN")]
     Down,
-    #[serde(rename = "pointerup")]
+    #[serde(rename = "ACTION_UP")]
     Up,
-    #[serde(rename = "pointercancel")]
+    #[serde(rename = "ACTION_CANCEL")]
     Cancel,
-    #[serde(rename = "pointermove")]
+    #[serde(rename = "ACTION_MOVE")]
     Move,
-    #[serde(rename = "pointerover")]
+    #[serde(rename = "ACTION_HOVER_MOVE")]
     Over,
-    #[serde(rename = "pointerenter")]
+    #[serde(rename = "ACTION_HOVER_ENTER")]
     Enter,
-    #[serde(rename = "pointerleave")]
+    #[serde(rename = "ACTION_HOVER_EXIT")]
     Leave,
-    #[serde(rename = "pointerout")]
-    Out,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -58,8 +56,8 @@ struct PointerEventMessage {
     pressure: f64,
     tilt_x: i32,
     tilt_y: i32,
-    width: f64,
-    height: f64,
+    touch_major: f64,
+    touch_minor: f64,
 }
 
 fn send_event(fd: c_int, type_: c_int, code: c_int, value: c_int) {
@@ -89,10 +87,9 @@ fn handlePen(event: PointerEventMessage, fd: c_int) {
         | PointerEventType::Move
         | PointerEventType::Over
         | PointerEventType::Enter => handleMove(event, fd),
-        PointerEventType::Up
-        | PointerEventType::Cancel
-        | PointerEventType::Leave
-        | PointerEventType::Out => handleEnd(event, fd),
+        PointerEventType::Up | PointerEventType::Cancel | PointerEventType::Leave => {
+            handleEnd(event, fd)
+        }
     }
 }
 

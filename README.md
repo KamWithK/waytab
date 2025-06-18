@@ -9,8 +9,6 @@ Draw with Android tablets on Linux
 3. Fully support all touch and stylus features such as multitouch, stylus tilt and pressure
 4. Wayland support
 
-Eventually a native app will be made, but initial prototypes use a website.
-
 ## Inspiration
 
 Taken heavy inspiration from the work off:

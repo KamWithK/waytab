@@ -23,14 +23,6 @@
               taplo
               rustPackages.clippy
               openssl
-
-              # Frontend.
-              nodePackages.nodejs
-              nodePackages.npm
-              nodePackages.typescript
-              nodePackages.prettier
-              nodePackages.wrangler
-              vtsls
             ];
             nativeBuildInputs = with pkgs; [
               udev
