@@ -4,9 +4,10 @@ use ashpd::desktop::{
     PersistMode,
     screencast::{CursorMode, Screencast, SourceType, Stream as ScreencastStream},
 };
-use gstreamer::{
-    self as gst,
-    prelude::{ElementExt, GstBinExtManual, GstObjectExt},
+use gstreamer::{self as gst, glib};
+use gstreamer_rtsp_server::{
+    self as gst_rtsp_server,
+    prelude::{RTSPMediaFactoryExt, RTSPMountPointsExt, RTSPServerExt, RTSPServerExtManual},
 };
 
 pub(crate) async fn open_portal() -> ashpd::Result<(ScreencastStream, OwnedFd)> {
@@ -42,54 +43,31 @@ pub(crate) async fn initiate_stream() {
 
     println!("node id {}, fd {}", pipewire_node_id, stream_raw_fd);
 
+    let pipeline = format!(
+        "pipewiresrc fd={stream_raw_fd} path={pipewire_node_id} ! vapostproc ! vah265enc ! rtph265pay name=pay0"
+    );
+    println!("{}", &pipeline);
+
     gst::init().expect("Unable to start gstreamer");
+    let main_loop = glib::MainLoop::new(None, false);
+    let server = gst_rtsp_server::RTSPServer::new();
+    server.set_address("192.168.1.10");
 
-    let pipewire_element = gst::ElementFactory::make("pipewiresrc")
-        .property("fd", stream_raw_fd)
-        .property("path", pipewire_node_id.to_string())
-        .property("do-timestamp", true)
-        .property("keepalive-time", 100)
-        .build()
-        .unwrap();
+    let mounts = server.mount_points().unwrap();
+    let factory = gst_rtsp_server::RTSPMediaFactory::new();
+    factory.set_shared(true);
+    factory.set_launch(&pipeline);
 
-    let wayland_sink = gst::ElementFactory::make("waylandsink").build().unwrap();
+    mounts.add_factory("/", factory);
 
-    let convert = gst::ElementFactory::make("videoconvert").build().unwrap();
+    let id = server.attach(None).unwrap();
 
-    let pipeline = gst::Pipeline::default();
-    pipeline
-        .add_many([&pipewire_element, &convert, &wayland_sink])
-        .expect("Failed to add elements to pipeline");
-    gst::Element::link_many([&pipewire_element, &convert, &wayland_sink])
-        .expect("Failed to link elements");
+    println!(
+        "Stream ready at rtsp://{}:{}",
+        server.address().unwrap().to_string(),
+        server.bound_port()
+    );
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .expect("Failed to start pipeline");
-
-    let bus = pipeline.bus().unwrap();
-
-    for msg in bus.iter_timed(gst::ClockTime::NONE) {
-        use gst::MessageView;
-
-        match msg.view() {
-            MessageView::Eos(..) => {
-                println!("EOS");
-                break;
-            }
-            MessageView::Error(err) => {
-                pipeline.set_state(gst::State::Null).unwrap();
-                eprintln!(
-                    "Got error from {}: {} ({})",
-                    msg.src()
-                        .map(|s| String::from(s.path_string()))
-                        .unwrap_or_else(|| "None".into()),
-                    err.error(),
-                    err.debug().unwrap_or_else(|| "".into()),
-                );
-                break;
-            }
-            _ => (),
-        }
-    }
+    main_loop.run();
+    id.remove();
 }
