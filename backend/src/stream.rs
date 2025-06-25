@@ -44,7 +44,7 @@ pub(crate) async fn initiate_stream() {
     println!("node id {}, fd {}", pipewire_node_id, stream_raw_fd);
 
     let pipeline = format!(
-        "pipewiresrc fd={stream_raw_fd} path={pipewire_node_id} ! vapostproc ! vah265enc ! rtph265pay name=pay0"
+        "pipewiresrc fd={stream_raw_fd} path={pipewire_node_id} min-buffers=1 max-buffers=4 ! vapostproc ! vah265enc ! rtph265pay name=pay0"
     );
     println!("{}", &pipeline);
 
@@ -57,6 +57,8 @@ pub(crate) async fn initiate_stream() {
     let factory = gst_rtsp_server::RTSPMediaFactory::new();
     factory.set_shared(true);
     factory.set_launch(&pipeline);
+    factory.set_buffer_size(0);
+    factory.set_latency(0u32);
 
     mounts.add_factory("/", factory);
 
