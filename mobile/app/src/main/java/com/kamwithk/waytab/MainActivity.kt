@@ -11,10 +11,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.alexvas.rtsp.widget.RtspSurfaceView
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
@@ -72,7 +76,33 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
         }
 
-        setContent { Box(Modifier.fillMaxSize().background(Color.Magenta)) }
+        setContent {
+            Box(Modifier.fillMaxSize().background(Color.Magenta)) {
+                AndroidView(
+                    factory = { context ->
+                        RtspSurfaceView(context).apply {
+                            val uri = "rtsp://rtsp.kamwithk.com:8554".toUri()
+                            init(uri, null, null, null)
+                            start(
+                                requestVideo = true,
+                                requestAudio = false,
+                                requestApplication = false,
+                            )
+
+                            //                            stop()
+                        }
+                    }
+                )
+
+                Box(
+                    modifier =
+                        Modifier.fillMaxSize().background(Color.Transparent).pointerInteropFilter {
+                            event ->
+                            handleMotion(event)
+                        }
+                )
+            }
+        }
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -100,10 +130,6 @@ class MainActivity : ComponentActivity() {
             client.close()
         }
     }
-
-    override fun onTouchEvent(event: MotionEvent?) = handleMotion(event)
-
-    override fun onGenericMotionEvent(event: MotionEvent?) = handleMotion(event)
 
     fun handleMotion(event: MotionEvent?): Boolean {
         if (event == null || session == null) return false

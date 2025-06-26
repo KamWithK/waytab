@@ -57,6 +57,8 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.serialization.kotlinx.json)
+
+    implementation(libs.rtsp.client.android)
 }
 
 ktfmt { kotlinLangStyle() }
