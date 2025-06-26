@@ -4,7 +4,7 @@ use ashpd::desktop::{
     PersistMode,
     screencast::{CursorMode, Screencast, SourceType, Stream as ScreencastStream},
 };
-use gstreamer::{self as gst, glib};
+use gstreamer::{self as gst, glib::MainLoop};
 use gstreamer_rtsp_server::{
     self as gst_rtsp_server,
     prelude::{RTSPMediaFactoryExt, RTSPMountPointsExt, RTSPServerExt, RTSPServerExtManual},
@@ -48,28 +48,32 @@ pub(crate) async fn initiate_stream() {
     );
     println!("{}", &pipeline);
 
-    gst::init().expect("Unable to start gstreamer");
-    let main_loop = glib::MainLoop::new(None, false);
-    let server = gst_rtsp_server::RTSPServer::new();
-    server.set_address("192.168.1.10");
+    tokio::task::spawn_blocking(move || {
+        let main_loop = MainLoop::new(None, false);
 
-    let mounts = server.mount_points().unwrap();
-    let factory = gst_rtsp_server::RTSPMediaFactory::new();
-    factory.set_shared(true);
-    factory.set_launch(&pipeline);
-    factory.set_buffer_size(0);
-    factory.set_latency(0u32);
+        gst::init().expect("Unable to start gstreamer");
+        let server = gst_rtsp_server::RTSPServer::new();
+        server.set_address("192.168.1.10");
 
-    mounts.add_factory("/", factory);
+        let mounts = server.mount_points().unwrap();
+        let factory = gst_rtsp_server::RTSPMediaFactory::new();
+        factory.set_shared(true);
+        factory.set_launch(&pipeline);
+        factory.set_buffer_size(0);
+        factory.set_latency(0u32);
 
-    let id = server.attach(None).unwrap();
+        let id = server.attach(None).unwrap();
+        mounts.add_factory("/", factory);
 
-    println!(
-        "Stream ready at rtsp://{}:{}",
-        server.address().unwrap().to_string(),
-        server.bound_port()
-    );
+        println!(
+            "Stream ready at rtsp://{}:{}",
+            server.address().unwrap(),
+            server.bound_port()
+        );
 
-    main_loop.run();
-    id.remove();
+        main_loop.run();
+        id.remove();
+    })
+    .await
+    .unwrap();
 }
