@@ -53,7 +53,7 @@ pub(crate) async fn initiate_stream() {
 
         gst::init().expect("Unable to start gstreamer");
         let server = gst_rtsp_server::RTSPServer::new();
-        server.set_address("192.168.1.10");
+        server.set_address("0.0.0.0");
 
         let mounts = server.mount_points().unwrap();
         let factory = gst_rtsp_server::RTSPMediaFactory::new();
@@ -64,12 +64,6 @@ pub(crate) async fn initiate_stream() {
 
         let id = server.attach(None).unwrap();
         mounts.add_factory("/", factory);
-
-        println!(
-            "Stream ready at rtsp://{}:{}",
-            server.address().unwrap(),
-            server.bound_port()
-        );
 
         main_loop.run();
         id.remove();

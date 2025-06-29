@@ -7,7 +7,7 @@ use tungstenite::Message;
 
 use crate::uinput::PointerEventMessage;
 
-const HOST: &str = "localhost";
+const HOST: &str = "0.0.0.0";
 const PORT: &str = "9002";
 
 pub(crate) async fn make_connections(stylus_sender: Sender<PointerEventMessage>) {

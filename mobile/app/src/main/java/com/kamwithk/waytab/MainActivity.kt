@@ -1,6 +1,7 @@
 package com.kamwithk.waytab
 
 import android.content.res.Resources
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
@@ -9,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
@@ -18,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.alexvas.rtsp.widget.RtspStatusListener
 import com.alexvas.rtsp.widget.RtspSurfaceView
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -29,11 +33,16 @@ import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.websocket.close
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
+import java.net.DatagramPacket
+import java.net.InetAddress
+import java.net.MulticastSocket
+import java.net.SocketTimeoutException
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -68,6 +77,8 @@ class MainActivity : ComponentActivity() {
     private var width = Resources.getSystem().displayMetrics.widthPixels
     private var height = Resources.getSystem().displayMetrics.heightPixels
 
+    private var serverAddress = mutableStateOf<InetAddress?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -77,22 +88,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            Box(Modifier.fillMaxSize().background(Color.Magenta)) {
-                AndroidView(
-                    factory = { context ->
-                        RtspSurfaceView(context).apply {
-                            val uri = "rtsp://rtsp.kamwithk.com:8554".toUri()
-                            init(uri, null, null, null)
-                            start(
-                                requestVideo = true,
-                                requestAudio = false,
-                                requestApplication = false,
-                            )
+            val address = serverAddress.value
 
-                            //                            stop()
-                        }
-                    }
-                )
+            Box(Modifier.fillMaxSize().background(Color.Magenta)) {
+                if (address != null) {
+                    RtspScreenContent(address)
+                }
 
                 Box(
                     modifier =
@@ -104,13 +105,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                session = client.webSocketSession(host = "websocket.kamwithk.com", path = "/wss")
-            } catch (e: Exception) {
-                Log.e("WebSocket", "Failed to connect:", e)
-            }
-        }
+        lifecycleScope.launch(Dispatchers.IO) { requestConnectServer() }
+
+        lifecycleScope.launch(Dispatchers.IO) { connectToWebsocket() }
 
         lifecycleScope.launch {
             eventFlow.collectLatest { eventMessage ->
@@ -121,6 +118,99 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private suspend fun connectToWebsocket() {
+        while (serverAddress.value == null) {
+            delay(100)
+        }
+        val address = serverAddress.value
+
+        try {
+            Log.d("websocket", "Trying to connect to ${address?.hostAddress}:9002")
+            session = client.webSocketSession(host = address?.hostAddress, port = 9002)
+            Log.d("websocket", "Connected")
+            session?.closeReason?.await()
+            Log.d("websocket", "Disconnected")
+
+            serverAddress.value = null
+            Log.d("websocket", "Server connection reset")
+            requestConnectServer()
+            connectToWebsocket()
+        } catch (e: Exception) {
+            Log.e("websocket", "Failed to connect:", e)
+        }
+    }
+
+    @Composable
+    private fun RtspScreenContent(serverAddress: InetAddress) {
+        AndroidView(
+            factory = { context ->
+                RtspSurfaceView(context).apply {
+                    val uri = "rtsp://${serverAddress.hostAddress}:8554".toUri()
+                    init(uri, null, null, null)
+                    start(requestVideo = true, requestAudio = false, requestApplication = false)
+
+                    setStatusListener(
+                        object : RtspStatusListener {
+                            override fun onRtspStatusFailed(message: String?) {
+                                Log.d("rtsp", "Failed to connect to $uri")
+                                start(
+                                    requestVideo = true,
+                                    requestAudio = false,
+                                    requestApplication = false,
+                                )
+                            }
+
+                            override fun onRtspStatusDisconnected() {
+                                Log.d("rtsp", "Disconnected, will try to reconnect to $uri")
+                                start(
+                                    requestVideo = true,
+                                    requestAudio = false,
+                                    requestApplication = false,
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        )
+    }
+
+    private fun requestConnectServer() {
+        Log.d("multicast", "Requesting connection to server")
+
+        val wifi = getSystemService(WIFI_SERVICE) as WifiManager
+        val multicastLock = wifi.createMulticastLock("multicastLock")
+        multicastLock.setReferenceCounted(true)
+        multicastLock.acquire()
+
+        val group = InetAddress.getByName("239.115.3.2")
+        val socket = MulticastSocket(4819)
+        socket.soTimeout = 1000
+
+        val buf = "request".toByteArray()
+        val packet = DatagramPacket(buf, buf.size, group, 4819)
+        socket.send(packet)
+
+        socket.joinGroup(group)
+
+        var fail = false
+        try {
+            socket.receive(packet)
+            serverAddress.value = packet.address
+            Log.d("multicast", "Server at ${serverAddress.value?.hostAddress} responded")
+        } catch (_: SocketTimeoutException) {
+            Log.d("multicast", "Server not found")
+            fail = true
+        }
+
+        socket.leaveGroup(group)
+        socket.close()
+        multicastLock?.release()
+
+        Log.d("multicast", "Server retry triggered")
+        if (fail) requestConnectServer()
     }
 
     override fun onDestroy() {
