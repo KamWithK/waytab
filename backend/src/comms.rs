@@ -1,3 +1,4 @@
+use anyhow::Result;
 use futures_util::StreamExt;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -21,16 +22,16 @@ pub(crate) async fn make_connections(stylus_sender: Sender<PointerEventMessage>)
 pub(crate) async fn accept_connection(
     stream: TcpStream,
     stylus_sender: Sender<PointerEventMessage>,
-) {
-    if let Ok(ws_stream) = tokio_tungstenite::accept_async(stream).await {
-        let (_, read) = ws_stream.split();
-        read.for_each(|msg| async {
-            let Ok(Message::Text(msg)) = msg else {
-                return;
-            };
+) -> Result<()> {
+    let ws_stream = tokio_tungstenite::accept_async(stream).await?;
+    let (_, mut read) = ws_stream.split();
 
-            stylus_sender.send(serde_json::from_str::<PointerEventMessage>(msg.as_str()).unwrap());
-        })
-        .await;
+    while let Some(msg) = read.next().await {
+        if let Message::Text(text) = msg? {
+            let json = serde_json::from_str::<PointerEventMessage>(&text)?;
+            stylus_sender.send(json)?;
+        }
     }
+
+    Ok(())
 }

@@ -14,6 +14,7 @@ ashpd = { version = "0.11.0", features = ["tokio", "pipewire"] }
 pipewire = "0.8.0"
 gstreamer = "0.23.7"
 gstreamer-rtsp-server = "0.23.5"
+anyhow = "1.0.98"
 
 [build-dependencies]
 bindgen = "0.72.0"
