@@ -39,6 +39,8 @@ int create_stylus(void) {
   ioctl(fd, UI_SET_EVBIT, EV_KEY);
   ioctl(fd, UI_SET_KEYBIT, BTN_TOOL_PEN);
   ioctl(fd, UI_SET_KEYBIT, BTN_TOOL_RUBBER);
+  ioctl(fd, UI_SET_KEYBIT, BTN_STYLUS);
+  ioctl(fd, UI_SET_KEYBIT, BTN_STYLUS2);
   ioctl(fd, UI_SET_KEYBIT, BTN_TOUCH);
 
   ioctl(fd, UI_SET_EVBIT, EV_MSC);

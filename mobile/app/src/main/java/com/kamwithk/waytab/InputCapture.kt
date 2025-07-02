@@ -22,7 +22,7 @@ data class MotionEventMessage(
     @SerialName("event_type") val eventType: String,
     @SerialName("pointer_id") val pointerId: Int,
     @SerialName("timestamp") val timestamp: Int,
-    @SerialName("pointer_type") val pointerType: String,
+    @SerialName("pointer_type") val pointerType: Int,
     @SerialName("buttons") val buttons: Int,
     @SerialName("x") val x: Float,
     @SerialName("y") val y: Float,
@@ -55,15 +55,6 @@ fun InputCapture() {
 }
 
 fun handleMotion(event: MotionEvent, width: Int, height: Int): MotionEventMessage {
-    val toolType =
-        when (event.getToolType(0)) {
-            MotionEvent.TOOL_TYPE_FINGER -> "touch"
-            MotionEvent.TOOL_TYPE_STYLUS -> "pen"
-            MotionEvent.TOOL_TYPE_ERASER -> "eraser"
-            MotionEvent.TOOL_TYPE_MOUSE -> "mouse"
-            else -> ""
-        }
-
     // TODO: Approximation but why do we flick between up and the angle?
     val tiltMagnitude = sin(event.getAxisValue(MotionEvent.AXIS_TILT))
     val tiltAngle = event.orientation
@@ -74,7 +65,7 @@ fun handleMotion(event: MotionEvent, width: Int, height: Int): MotionEventMessag
         MotionEvent.actionToString(event.action),
         event.getPointerId(event.actionIndex),
         event.eventTime.toInt(),
-        toolType,
+        event.getToolType(0),
         event.buttonState,
         event.x / width.toFloat(),
         event.y / height.toFloat(),

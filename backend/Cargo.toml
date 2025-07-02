@@ -15,6 +15,7 @@ pipewire = "0.8.0"
 gstreamer = "0.23.7"
 gstreamer-rtsp-server = "0.23.5"
 anyhow = "1.0.98"
+bitflags = { version = "2.9.1", features = ["serde"] }
 
 [build-dependencies]
 bindgen = "0.72.0"
